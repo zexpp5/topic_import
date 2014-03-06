@@ -9,7 +9,7 @@ cUnit = 0
 cSeries = 0
 cTopic = 0
 
-# 插入module topic
+# 插入module 
 def persistModuleFromFile(file, subject_id, stage_id, conn):
     global cModule  
     cm = cModule
@@ -18,10 +18,15 @@ def persistModuleFromFile(file, subject_id, stage_id, conn):
     line = f.readline()
     while line:
         tri = line.split("\t")
+        if tri[0].find(" ") >= 0:
+            print(tri[0]+"---------------------")
         if preModule != tri[0]:
             cm += 1
-            print(tri[0]+file[file.rfind("/"):len(file)])
-            cur.execute("INSERT INTO t_module VALUES ("+str(cm)+",'','"+tri[0]+"','"+stage_id+"','"+subject_id+"')")
+            # print(tri[0]+file[file.rfind("/"):len(file)])
+            cur.execute("SELECT * FROM t_module WHERE name='"+tri[0]+"' AND subject_id="+str(subject_id))
+            print(cur.rowcount)
+            if cur.rowcount == 0:
+                cur.execute("INSERT INTO t_module VALUES ("+str(cm)+",'','"+tri[0]+"','"+stage_id+"','"+subject_id+"',0,0)")
         preModule = tri[0]
         # print(+":"+tri[1]+":"+tri[2])
         line = f.readline()
@@ -42,8 +47,8 @@ def persistUnitFromFile(file, subject_id, stage_id, conn):
         tri = line.split("\t")
         if preUnit != tri[1]:
             cu += 1
-            print(tri[1]+file[file.rfind("/"):len(file)])
-            cur.execute("INSERT INTO t_unit VALUES ("+str(cu)+",'','"+str(module[str(tri[0])])+"','"+tri[1]+"','"+stage_id+"','"+subject_id+"')")
+            # print(tri[1]+file[file.rfind("/"):len(file)])
+            cur.execute("INSERT INTO t_unit VALUES ("+str(cu)+",'','"+str(module[str(tri[0])+str(subject_id)])+"','"+tri[1]+"','"+stage_id+"','"+subject_id+"')")
         preUnit = tri[1]
         # print(+":"+tri[1]+":"+tri[2])
         line = f.readline()
@@ -58,15 +63,15 @@ def persistSeriesFromFile(file, subject_id, stage_id, conn):
     f = open(file,"r",encoding="utf-16")
     preSeries = ""
     line = f.readline()
-    print(f)
+    # print(f)
     while line:
         tri = line.split("\t")
-        print(tri[0])
-        print(tri[1])
+        # print(tri[0])
+        # print(tri[1])
         if preSeries != tri[1]:
             cs += 1
-            print(tri[1]+file[file.rfind("/"):len(file)])
-            cur.execute("INSERT INTO t_series VALUES ("+str(cs)+",'','','"+str(module[str(tri[0])])+"','"+tri[1]+"','"+stage_id+"','"+subject_id+"')")
+            # print(tri[1]+file[file.rfind("/"):len(file)])
+            cur.execute("INSERT INTO t_series VALUES ("+str(cs)+",'','','"+str(module[str(tri[0])+str(subject_id)])+"','"+tri[1]+"','"+stage_id+"','"+subject_id+"')")
         preSeries = tri[1]
         # print(+":"+tri[1]+":"+tri[2])
         line = f.readline()
@@ -85,7 +90,8 @@ def persistTopicFromFile(file, subject_id, stage_id, conn):
         tri = line.split("\t")
         if preTopic != tri[2]:
             ct += 1
-            print(tri[2]+file[file.rfind("/"):len(file)])
+            # print(tri[2]+file[file.rfind("/"):len(file)])
+            # print("INSERT INTO t_topic VALUES ("+str(ct)+",'','','"+tri[2]+"',0,'"+stage_id+"','"+subject_id+"','"+str(unit[str(tri[1])])+"')")
             cur.execute("INSERT INTO t_topic VALUES ("+str(ct)+",'','','"+tri[2]+"',0,'"+stage_id+"','"+subject_id+"','"+str(unit[str(tri[1])])+"')")
         preTopic = tri[2]
         # print(+":"+tri[1]+":"+tri[2])
@@ -132,10 +138,16 @@ for parent,dirnames,filenames in os.walk(rootDir):
         persistModuleFromFile(rootDir+"/"+filename,subject[filename[2:4]+filename[0:2]],stage[filename[2:4]],conn)
 
 # 从数据库加载module
-cur.execute("SELECT t.id, t.name FROM t_module t")
+cur.execute("SELECT t.id, t.name, t.subject_id FROM t_module t")
 for row in cur:
-   module[row[1]] = row[0]
-   moduleId[row[0]] = row[1]
+    print(row[1]+str(row[2]))
+    module[str(row[1])+str(row[2])] = row[0]
+    moduleId[row[0]] = row[1]
+
+
+
+
+# conn.commit()
 
 #清空unit表
 cur.execute("DELETE FROM t_unit")
@@ -146,7 +158,7 @@ for parent,dirnames,filenames in os.walk(rootDir):
         if filename[4:6] == "主题":
             persistUnitFromFile(rootDir+"/"+filename,subject[filename[2:4]+filename[0:2]],stage[filename[2:4]],conn)
 
-#清空unit表
+#清空series表
 cur.execute("DELETE FROM t_series")
 
 # 从文件load series
@@ -155,13 +167,32 @@ for parent,dirnames,filenames in os.walk(rootDir):
         if filename[4:6] == "专题":
             persistSeriesFromFile(rootDir+"/"+filename,subject[filename[2:4]+filename[0:2]],stage[filename[2:4]],conn)
 
+
+
+for pk in moduleId.keys():
+    cur.execute("SELECT t.id FROM t_unit t WHERE t.module_id="+str(pk))
+    countUnit = cur.rowcount
+    cur.execute("UPDATE t_module t SET t.count_unit="+str(countUnit)+" WHERE t.id="+str(pk))
+    cur.execute("SELECT t.id FROM t_series t WHERE t.module_id="+str(pk))
+    countSeries = cur.rowcount
+    cur.execute("UPDATE t_module t SET t.count_series="+str(countSeries)+" WHERE t.id="+str(pk))
+
+
+
+
+
+
+
 # 从数据库加载unit
 cur.execute("SELECT t.id, t.name FROM t_unit t")
 for row in cur:
    unit[row[1]] = row[0]
    unitId[row[0]] = row[1]
 
-# 从文件load series
+#清空topic表
+cur.execute("DELETE FROM t_topic")
+
+# 从文件load topic
 for parent,dirnames,filenames in os.walk(rootDir):   
     for filename in filenames:
         if filename[4:6] == "主题":
